@@ -3,6 +3,9 @@ data "aws_caller_identity" "current" {}
 # Explicit key policy: delegates key access to IAM in this account only.
 # Including the account root principal prevents the key becoming unmanageable.
 data "aws_iam_policy_document" "tfstate_kms" {
+  #checkov:skip=CKV_AWS_356:Key policy - Resource "*" means this key only
+  #checkov:skip=CKV_AWS_111:Key policy - AWS default root delegation; access is governed by IAM
+  #checkov:skip=CKV_AWS_109:Key policy - AWS default root delegation; access is governed by IAM
   statement {
     sid       = "EnableIAMPermissionsForThisAccount"
     effect    = "Allow"
