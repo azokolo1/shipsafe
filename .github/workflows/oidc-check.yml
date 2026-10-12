@@ -1,0 +1,37 @@
+name: oidc-check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/oidc-check.yml"
+
+# Least privilege for the GitHub token itself
+permissions:
+  contents: read
+  id-token: write   # required to request the OIDC token
+
+jobs:
+  whoami:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assume AWS role via OIDC (no stored credentials)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-session-name: gha-${{ github.run_id }}
+          aws-region: eu-west-2
+          mask-aws-account-id: true
+
+      - name: Show who we are
+        run: aws sts get-caller-identity --query Arn --output text
+
+      - name: Prove the plan role cannot write Terraform state
+        run: |
+          echo "probe" > probe.txt
+          if aws s3 cp probe.txt s3://shipsafe-tfstate-699281550756-eu-west-2/bootstrap/probe.txt; then
+            echo "UNEXPECTED: write to state bucket succeeded"
+            exit 1
+          fi
+          echo "Expected: write to state bucket was denied (least privilege works)"
