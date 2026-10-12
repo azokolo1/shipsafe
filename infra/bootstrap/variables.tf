@@ -25,3 +25,13 @@ variable "budget_email" {
   type        = string
   sensitive   = true
 }
+
+variable "github_owner_id" {
+  description = "Immutable numeric ID of the GitHub repo owner (used in OIDC sub claim)"
+  type        = string
+}
+
+variable "github_repo_id" {
+  description = "Immutable numeric ID of the GitHub repo (used in OIDC sub claim)"
+  type        = string
+}

@@ -26,8 +26,8 @@ data "aws_iam_policy_document" "gha_plan_trust" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repo}:pull_request",
-        "repo:${var.github_repo}:ref:refs/heads/main",
+        "${local.github_sub_prefix}:pull_request",
+        "${local.github_sub_prefix}:ref:refs/heads/main",
       ]
     }
   }
@@ -81,4 +81,12 @@ resource "aws_iam_role_policy" "gha_plan_state" {
   name   = "terraform-state-access"
   role   = aws_iam_role.gha_plan.id
   policy = data.aws_iam_policy_document.gha_plan_state.json
+}
+
+# GitHub's OIDC sub claim format: repo:<owner>@<owner_id>/<repo>@<repo_id>:<context>
+# Binding to immutable IDs prevents a re-created repo with the same name inheriting trust.
+locals {
+  github_owner      = split("/", var.github_repo)[0]
+  github_name       = split("/", var.github_repo)[1]
+  github_sub_prefix = "repo:${local.github_owner}@${var.github_owner_id}/${local.github_name}@${var.github_repo_id}"
 }
