@@ -38,5 +38,10 @@ def configure_logging(service: str, version: str, level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
+    # Route uvicorn's startup/error messages through the same JSON formatter
+    for name in ("uvicorn", "uvicorn.error"):
+        uvicorn_logger = logging.getLogger(name)
+        uvicorn_logger.handlers = []
+        uvicorn_logger.propagate = True
     # uvicorn's own access log would duplicate our structured request log
     logging.getLogger("uvicorn.access").disabled = True
