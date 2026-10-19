@@ -2,10 +2,10 @@
 
 | | Naive (`python:3.12`, single stage) | Hardened (multi-stage, slim, digest-pinned) |
 |---|---|---|
-| Compressed size | 489 MB | 73.4 MB (before pip removal) |
+| Compressed size | 489 MB | 73.4 MB; 75.1 MB after pip removal (deletion layer cannot reclaim base-layer space) |
 | CRITICAL | 17 | 0 |
 | HIGH | 357 | 44 (all Debian OS packages, no fix published) |
-| HIGH/CRITICAL with a fix available | - | __ |
+| HIGH/CRITICAL with a fix available | - | 0 (CI gate passes) |
 | Runs as | root (uid 0) | app (uid 10001) |
 | Read-only root filesystem | no | yes (verified) |
 | Graceful shutdown (`docker stop`) | - | 0.575 s (exec-form CMD, Python is PID 1) |
