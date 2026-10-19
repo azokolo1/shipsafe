@@ -27,7 +27,8 @@ LABEL org.opencontainers.image.title="shipsafe" \
       org.opencontainers.image.revision="${APP_VERSION}"
 
 RUN groupadd --system --gid 10001 app \
- && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
+ && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
+ && python -m pip uninstall --yes pip
 
 WORKDIR /app
 # Owned by root, run as app: the process cannot modify its own code
