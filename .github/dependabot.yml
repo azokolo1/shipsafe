@@ -23,3 +23,8 @@ updates:
     directory: /app
     schedule:
       interval: weekly
+    ignore:
+      # Python 3.12 -> 3.13+ is a deliberate upgrade (ADR + tests), not a bot PR.
+      # Digest updates for 3.12-slim (Debian security fixes) still come through.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

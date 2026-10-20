@@ -97,8 +97,19 @@ jobs:
           sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
           mkdir -p bin && tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -C bin gitleaks
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Scan full git history
-        run: gitleaks git --redact --no-banner --verbose .
+      - name: Scan for secrets
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            # PR gate: judge only the commits this PR adds (other branches can't poison it)
+            gitleaks git --redact --no-banner --verbose --log-opts="${BASE_SHA}..${HEAD_SHA}" .
+          else
+            # main: full history reachable from main
+            gitleaks git --redact --no-banner --verbose --log-opts="--full-history HEAD" .
+          fi
 
   image:
     name: image / build + smoke + scan
