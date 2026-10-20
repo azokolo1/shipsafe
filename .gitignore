@@ -18,3 +18,7 @@ __pycache__/
 
 # Windows metadata (WSL copies)
 *:Zone.Identifier
+
+# Python tooling caches
+.ruff_cache/
+.pytest_cache/

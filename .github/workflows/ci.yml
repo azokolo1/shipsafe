@@ -1,0 +1,166 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Default: the GITHUB_TOKEN can only read the repo. Jobs opt in to more.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the now-obsolete run
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: "1.16.5"
+  TFLINT_VERSION: "v0.64.0"
+  CHECKOV_VERSION: "3.3.26"
+  GITLEAKS_VERSION: "8.30.1"
+  TRIVY_VERSION: "0.75.0"
+
+jobs:
+  app:
+    name: app / lint + test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: app/uv.lock
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Lint (ruff, incl. security rules)
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Unit tests
+        run: uv run pytest -q
+
+  iac:
+    name: iac / terraform + checkov
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: terraform fmt
+        run: terraform fmt -check -recursive infra
+      - name: terraform validate (no backend, no credentials)
+        working-directory: infra/bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Install TFLint (checksum verified)
+        run: |
+          cd "$RUNNER_TEMP"
+          base="https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}"
+          curl -fsSLO "$base/tflint_linux_amd64.zip"
+          curl -fsSLO "$base/checksums.txt"
+          sha256sum --ignore-missing -c checksums.txt
+          unzip -q tflint_linux_amd64.zip -d "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: TFLint
+        run: tflint --chdir=infra/bootstrap
+      - name: Checkov (IaC security)
+        run: pipx run "checkov==${CHECKOV_VERSION}" -d infra --quiet --compact
+
+  secrets:
+    name: secrets / gitleaks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # full history: a secret deleted later is still leaked
+          persist-credentials: false
+      - name: Install Gitleaks (checksum verified)
+        run: |
+          cd "$RUNNER_TEMP"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -fsSLO "$base/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          mkdir -p bin && tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -C bin gitleaks
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Scan full git history
+        run: gitleaks git --redact --no-banner --verbose .
+
+  image:
+    name: image / build + smoke + scan
+    needs: app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # upload Trivy results to the Security tab
+    env:
+      IMAGE: shipsafe:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t "$IMAGE" --build-arg "APP_VERSION=${GITHUB_SHA::7}" app
+      - name: Smoke test (hardened runtime flags)
+        run: |
+          docker run -d --name smoke -p 8080:8080 --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges "$IMAGE"
+          for _ in $(seq 1 30); do curl -fsS localhost:8080/healthz && break; sleep 1; done
+          curl -fsS localhost:8080/version | tee version.json
+          grep -q "${GITHUB_SHA::7}" version.json
+          test "$(docker exec smoke id -u)" = "10001"
+      - name: Smoke test logs
+        if: always()
+        run: docker logs smoke || true
+      - name: Install Trivy (checksum verified)
+        run: |
+          cd "$RUNNER_TEMP"
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          curl -fsSLO "$base/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLO "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c "trivy_${TRIVY_VERSION}_checksums.txt"
+          mkdir -p bin && tar -xzf "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -C bin trivy
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Gate - fail on CRITICAL or fixable HIGH
+        run: |
+          trivy image --no-progress --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 1 "$IMAGE"
+      - name: Report - all HIGH/CRITICAL (incl. unfixed) as SARIF
+        if: always()
+        run: |
+          trivy image --no-progress --severity HIGH,CRITICAL \
+            --format sarif --output trivy.sarif "$IMAGE"
+      - name: Upload to GitHub code scanning
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image
+
+  # Single required check for branch protection: green only if every job passed
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [app, iac, secrets, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: All jobs succeeded
+        run: |
+          echo '${{ toJSON(needs) }}'
+          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "false"
