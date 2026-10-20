@@ -59,7 +59,7 @@ def create_app(settings: Settings | None = None, queue: JobQueue | None = None) 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         """Liveness: the process is up. Deliberately checks no dependencies."""
-        return {"status": "ok"}
+        return {"status": "degraded"}
 
     @app.get("/readyz")
     def readyz() -> dict[str, str]:
