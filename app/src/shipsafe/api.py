@@ -56,6 +56,17 @@ def create_app(settings: Settings | None = None, queue: JobQueue | None = None) 
         )
         return response
 
+    @app.get("/")
+    def index() -> dict[str, Any]:
+        """Landing response for anyone who opens the URL in a browser."""
+        return {
+            "service": settings.service_name,
+            "version": settings.version,
+            "description": "ShipSafe: portfolio ECS delivery platform, not a commercial service",
+            "endpoints": ["/healthz", "/readyz", "/version"],
+            "source": "https://github.com/azokolo1/shipsafe",
+        }
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         """Liveness: the process is up. Deliberately checks no dependencies."""
