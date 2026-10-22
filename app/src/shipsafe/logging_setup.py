@@ -5,7 +5,20 @@ import logging
 import sys
 from datetime import UTC, datetime
 
-_EXTRA_FIELDS = ("request_id", "method", "path", "status", "duration_ms", "job_id", "event")
+_EXTRA_FIELDS = (
+    "request_id",
+    "method",
+    "path",
+    "status",
+    "duration_ms",
+    "job_id",
+    "event",
+    "attempts",
+    "op",
+    "error",
+    "migration",
+    "count",
+)
 
 
 class JsonFormatter(logging.Formatter):

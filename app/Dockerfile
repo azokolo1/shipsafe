@@ -33,6 +33,8 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 # Owned by root, run as app: the process cannot modify its own code
 COPY --from=builder /app/.venv /app/.venv
+# Amazon RDS CA bundle (eu-west-2) so the app can verify the database's TLS certificate.
+COPY certs/rds-ca-eu-west-2-bundle.pem /app/certs/rds-ca-eu-west-2-bundle.pem
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
