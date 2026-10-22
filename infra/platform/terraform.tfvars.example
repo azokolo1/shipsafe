@@ -1,1 +1,2 @@
-owner = "your-name"
+owner     = "your-name"
+image_tag = "98f94bb"

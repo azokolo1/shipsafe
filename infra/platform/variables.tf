@@ -33,3 +33,38 @@ variable "availability_zone_ids" {
     error_message = "Exactly two AZ IDs are expected (one NAT gateway, two-AZ ALB and service)."
   }
 }
+
+variable "domain_name" {
+  description = "Hostname the service is served on. Its zone and certificate live in infra/foundation."
+  type        = string
+  default     = "shipsafe.regopsintelligence.com"
+}
+
+variable "ecr_repository_name" {
+  description = "ECR repository holding the application image (created by infra/foundation)."
+  type        = string
+  default     = "shipsafe"
+}
+
+variable "image_tag" {
+  description = "Image tag to deploy. Must already exist in ECR; it is resolved to an immutable digest at plan time."
+  type        = string
+}
+
+variable "desired_count" {
+  description = "Number of API tasks. Two spreads the service across both AZs."
+  type        = number
+  default     = 2
+}
+
+variable "container_port" {
+  description = "Port the API container listens on."
+  type        = number
+  default     = 8080
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch Logs retention for the API. Short, because the stack is destroyed every session."
+  type        = number
+  default     = 7
+}
