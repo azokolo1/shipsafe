@@ -4,7 +4,9 @@
 
 **Cost:** about $0.128/hour while up (NAT gateway, ALB, 2 Fargate tasks, 3 public IPv4 addresses). The ALB and NAT gateway bill per **started** hour, so batch work into one session instead of several short ones.
 
-**Measured timings (M3C):** apply about 4 minutes; destroy about 4.5 minutes before the M3D dependency fix.
+**Measured timings:** apply 3m39s to 4m02s on an empty stack; rolling deploy 2m07s. Destroy took 4m25s in M3C, 2m55s of it waiting on the internet gateway; after the M3D dependency fix the gateway takes seconds (total destroy time to be re-measured with the saved-plan method below).
+
+**Time box:** note the time when apply starts. At 50 minutes, start **Down** unless you will finish within 10 minutes: a started hour of ALB and NAT bills in full.
 
 ## Before you start
 
@@ -61,13 +63,18 @@ Summarise:
 wc -l < ~/traffic.log                        # total requests
 grep -cE ' 200$' ~/traffic.log               # successful
 grep -vE ' 200$' ~/traffic.log               # every failure, with its time
+grep '"version":"<old-tag>"' ~/traffic.log | tail -1   # last old-version response (rollouts)
+grep '"version":"<new-tag>"' ~/traffic.log | head -1   # first new-version response
 ```
+
+Replace `<old-tag>` and `<new-tag>` before running the last two lines.
 
 ## Down
 
 ```bash
 cd ~/shipsafe/infra/platform
-date +%T; time terraform destroy             # 37 to destroy; type yes
+terraform plan -destroy -out=destroy.tfplan  # review: 37 to destroy
+date +%T; time terraform apply destroy.tfplan # timed without waiting on a prompt
 cd ../..
 
 aws ec2 describe-vpcs --filters Name=tag:Project,Values=shipsafe --query 'Vpcs[].VpcId'
