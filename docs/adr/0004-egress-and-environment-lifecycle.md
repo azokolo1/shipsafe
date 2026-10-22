@@ -41,7 +41,8 @@ On-demand prices for eu-west-2, retrieved from the AWS Pricing API on 2026-10-21
 - ALB and NAT bill per started hour: repeated apply/destroy cycles within an hour each cost a full hour.
 - **Single NAT:** if its AZ fails, tasks in the other AZ lose outbound access (new image pulls, log delivery). Production would run one NAT per AZ (about +$0.055/hour).
 - Platform resources must be destroy-friendly: no ALB deletion protection, short log retention, and nothing in the platform stack that the next apply depends on.
-- The domain registration renews yearly and bills to whichever account holds it, which can trigger the budget alert in the renewal month.
+- The domain registration renews yearly in account 577483322388, so it does not count against the ShipSafe budget in 699281550756.
+- ShipSafe DNS depends on one `shipsafe` NS record in the parent zone, which lives in the RegOps account (337909737271). If that record is deleted, the hostname stops resolving and the certificate cannot renew. The parent zone's comment records the dependency; an M6 check will alert on broken delegation.
 
 ## Alternatives considered
 
