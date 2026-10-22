@@ -12,6 +12,11 @@ resource "aws_lb" "main" {
   enable_deletion_protection = false
 
   tags = { Name = local.name }
+
+  # An internet-facing ALB needs the IGW, and holds public IPs that block the IGW
+  # from detaching. Explicit ordering: IGW first on create, ALB first on destroy.
+  # Without it, destroy spent 2m55s retrying the IGW detach (M3C evidence).
+  depends_on = [aws_internet_gateway.main]
 }
 
 resource "aws_lb_target_group" "api" {

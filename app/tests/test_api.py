@@ -17,6 +17,16 @@ def make_client() -> tuple[TestClient, InMemoryQueue]:
     return TestClient(create_app(settings=settings, queue=queue)), queue
 
 
+def test_index_describes_service():
+    client, _ = make_client()
+    response = client.get("/")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "shipsafe-test"
+    assert body["version"] == "test-sha"
+    assert "/healthz" in body["endpoints"]
+
+
 def test_healthz_ok():
     client, _ = make_client()
     response = client.get("/healthz")
